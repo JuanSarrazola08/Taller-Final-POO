@@ -1,62 +1,130 @@
 # Taller-Final-POO
 
-Mi proyecto final consiste en un juego llamado "Mundo Oscuro" donde el jugador se mueve por un mapa y, al desplazarse, pueden ocurrir eventos aleatorios (enemigos, comida, armas) y existe una baja probabilidad de encontrar la salida.
+Juego de aventura en 2D llamado **"Mundo Oscuro"** donde el jugador se mueve por un mapa con cuadrícula, encuenra enemigos, comida, armas y busca la salida. Implementa una interfaz gráfica con pygame, gestión de inventario, combate por turnos y un sistema de puntajes persistente.
 
-Contenido
-- Código original del juego (consola) añadido en [src/juego.py](src/juego.py#L1-L400).
+## Descripción del Proyecto
 
-Estructura propuesta del proyecto
-- src/: código fuente
-	- juego.py        -> Código que proporcionaste (modelo y lógica de la consola)
-- puntajes.json     -> creado en tiempo de ejecución (almacena resultados)
-- requirements.txt  -> dependencias recomendadas
+- **Género**: Juego de rol/aventura por turnos con exploración aleatoria
+- **Mecánicas**: Movimiento en cuadrícula, combate, inventario, eventos aleatorios, sistema de puntuación
+- **Tecnología**: Python 3.12+, Pygame 2.6+
+- **Plataforma**: Windows, Linux, macOS
 
-Arquitectura sugerida
-Propongo seguir una separación por capas (Modelo — Juego/Engine — Interfaz), inspirada en MVC:
+## Estructura del Proyecto
 
-- Modelo (`models/`): clases puras del dominio (`Personaje`, `Jugador`, `Enemigo`, `Arma`, `Comida`, `Inventario`). Actualmente están dentro de `src/juego.py`.
-- Lógica del juego / motor (`engine/`): funciones que controlan el flujo del juego (`generar_enemigo`, `combate`, `evento_random`, `guardar_resultado`, `mostrar_top5`). Estas funciones deben poder ejecutarse sin dependencia de la consola (sin `input()` ni `print()` para la lógica central).
-- Interfaz (`ui/`): aquí irá la capa gráfica (pantallas, renderizado, manejo de eventos). Reemplazará llamadas a `input()` y `print()` por eventos, callbacks y renderizado en pantalla.
+```
+src/
+├── models.py       # Clases del dominio (Personaje, Jugador, Enemigo, Arma, Comida, Inventario)
+├── engine.py       # Lógica del juego (eventos, combate, guardado de puntajes)
+├── ui/
+│   └── main.py     # Interfaz gráfica con pygame (pantalla de inicio, juego, top 5)
+└── juego.py        # Versión original del código (consola)
 
-Beneficios:
-- Facilita probar la lógica sin UI.
-- Permite múltiples frontends (consola, pygame, tkinter) reutilizando la misma lógica.
+scripts/
+└── auto_run_ui.py  # Script de prueba headless
 
-Pasos recomendados para pasar a interfaz gráfica (ejemplo con `pygame` — recomendado para juegos más visuales):
+requirements.txt    # Dependencias del proyecto
+puntajes.json       # Almacenamiento de puntuaciones (creado en tiempo de ejecución)
+```
 
-1. Refactorizar el código actual en módulos:
-	 - `src/models.py` — todas las clases (sin llamadas a `input()`/`print()` dentro de la lógica de modelo).
-	 - `src/engine.py` — funciones `generar_enemigo`, `combate`, `evento_random`, `guardar_resultado`, `mostrar_top5` (recibiendo callbacks o retornando eventos en vez de interactuar con la consola).
-	 - `src/main.py` — punto de arranque que inicializa la interfaz y el bucle del juego.
-2. Diseñar un `Game` o `Controller` que mantenga el estado (jugador actual, pantalla activa, puntajes) y exponga métodos como `update(dt)`, `handle_event(ev)`, `render(screen)`.
-3. Implementar pantallas (estados) para: `Menu`, `Juego`, `GameOver`, `Top5`.
-4. Reemplazar menús de texto por botones/teclas y HUD para mostrar vida, puntos y distancia en tiempo real.
-5. Integrar guardado de puntajes usando la misma `guardar_resultado`, llamada desde el `Game` al terminar la partida.
+## Dependencias
 
-Alternativa ligera: `tkinter` si quieres interfaces con controles nativos (botones, labels) y menos trabajo con render loop. `pygame` ofrece mayor control y animaciones.
+- **pygame** >= 2.1.3 — Motor gráfico para la interfaz 2D
 
-Dependencias sugeridas
-- pygame>=2.1.3  # si eliges pygame
+## Instalación
 
-Cómo ejecutar (actual, en consola)
+### 1. Clonar el repositorio
 
-1. Crear y activar un entorno virtual:
+```bash
+git clone https://github.com/JuanSarrazola08/Taller-Final-POO.git
+cd Taller-Final-POO
+```
 
-`python -m venv venv`
+### 2. Crear entorno virtual
 
-`venv\\Scripts\\activate` (Windows PowerShell: `venv\\Scripts\\Activate.ps1`)
+```bash
+python -m venv .venv
+```
 
-2. Ejecutar el juego de consola:
+### 3. Activar entorno virtual
 
-`python -m src.juego`
+**Windows (PowerShell):**
+```powershell
+.\.venv\Scripts\Activate.ps1
+```
 
-Siguientes tareas (priorizadas)
-- Refactorizar clases a `src/models.py`.
-- Mover lógica de juego a `src/engine.py` y eliminar dependencias de `input()`/`print()`.
-- Elegir librería para UI (`pygame` recomendado) y crear `src/ui/main.py` con el bucle principal.
-- Implementar pantalla de menú, pantalla de juego y pantalla de resultados.
+**Windows (CMD):**
+```cmd
+.venv\Scripts\activate.bat
+```
 
-Si quieres, puedo:
-- Refactorizar automáticamente tu código en módulos (`models.py`, `engine.py`, `main.py`).
-- Crear un esqueleto con `pygame` que muestre el HUD y permita mover al jugador y generar eventos.
+**Linux/macOS:**
+```bash
+source .venv/bin/activate
+```
+
+### 4. Instalar dependencias
+
+```bash
+python -m pip install --upgrade pip
+pip install -r requirements.txt
+```
+
+## Ejecución
+
+### Ejecutar el juego con interfaz gráfica
+
+```bash
+python -m src.ui.main
+```
+
+### Ejecutar prueba automatizada (headless)
+
+```bash
+python scripts/auto_run_ui.py
+```
+
+## Cómo Jugar
+
+- **Movimiento**: WASD o flechas del teclado
+- **Ver inventario**: Tecla `I`
+- **Usar comida**: Tecla `U`
+- **Recoger items**: Tecla `Y` (sí) / `N` (no)
+- **Salir**: Tecla `Q`
+- **En pantalla de Game Over**: Tecla `ESC` (guarda y muestra Top 5)
+
+## Objetivos del Juego
+
+- Sobrevivir 40 turnos o encontrar la salida (probabilidad baja)
+- Acumular puntos derrotando enemigos
+- Administrar inventario (máx. 3 items)
+- Gestionar salud comiendo alimentos
+
+## Características Implementadas
+
+- ✅ Interfaz gráfica con pygame
+- ✅ Mapa con cuadrícula y sprite de mago
+- ✅ Pantalla de inicio con validaciones
+- ✅ Pantalla de juego con HUD (vida, puntos, distancia)
+- ✅ Log de eventos y combates
+- ✅ Gestión de inventario visual
+- ✅ Guardado persistente de puntuaciones (JSON)
+- ✅ Tabla de Top 5 puntuaciones
+
+## Arquitectura
+
+El proyecto sigue un patrón de capas:
+
+- **Modelo** (`models.py`): Clases puras del dominio sin entrada/salida
+- **Motor** (`engine.py`): Lógica de juego desacoplada de la UI
+- **UI** (`ui/main.py`): Interfaz gráfica con manejo de eventos
+
+Esto permite reutilizar la lógica con diferentes frontends (consola, web, etc.).
+
+## Autor
+
+**JuanSarrazola08**
+
+## Licencia
+
+Proyecto educativo — Taller Final Programación Orientada a Objetos
 
