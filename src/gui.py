@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import random
 import tkinter as tk
-from tkinter import messagebox
+from tkinter import ttk, messagebox
 
 from juego import (
     Arma,
@@ -26,9 +26,89 @@ COLOR_ACENTO = "#7aa2f7"
 COLOR_OK = "#9ece6a"
 COLOR_ERROR = "#f7768e"
 
+COLOR_OCULTO = "#11111b"
+COLOR_VISITADA = "#3b3b54"
+COLOR_BORDE = "#1e1e2e"
+COLOR_JUGADOR = "#7aa2f7"
+COLOR_COMIDA = "#9ece6a"
+COLOR_ARMA = "#e0af68"
+COLOR_ENEMIGO = "#f7768e"
+COLOR_SALIDA = "#bb9af7"
+COLOR_RASTRO = "#6c7086"
+
 FUENTE_TITULO = ("Helvetica", 18, "bold")
 FUENTE_NORMAL = ("Helvetica", 11)
 FUENTE_LOG = ("Courier", 10)
+FUENTE_CELDA = ("Helvetica", 14)
+
+GRID_SIZE = 10
+CELDA_PX = 32
+
+# tipos: "nada", "comida", "arma", "enemigo", "salida"
+ICONO_CELDA = {
+    "nada": ("", COLOR_VISITADA),
+    "comida": ("🍖", COLOR_COMIDA),
+    "arma": ("⚔", COLOR_ARMA),
+    "enemigo": ("👾", COLOR_ENEMIGO),
+    "salida": ("🚪", COLOR_SALIDA),
+}
+
+
+# =====================================================
+# MAPA
+# =====================================================
+
+class Mapa:
+
+    def __init__(self, tamanio: int = GRID_SIZE) -> None:
+
+        self.tamanio: int = tamanio
+        self.celdas: dict[tuple[int, int], str] = {}
+        self.visitadas: set[tuple[int, int]] = set()
+        self.rastros: dict[tuple[int, int], str] = {}
+
+        for x in range(tamanio):
+            for y in range(tamanio):
+                self.celdas[(x, y)] = self._generar_tipo()
+
+        # el inicio siempre seguro y visitado
+        self.celdas[(0, 0)] = "nada"
+        self.visitadas.add((0, 0))
+
+        # asegurar al menos una salida
+        while True:
+            x = random.randint(0, tamanio - 1)
+            y = random.randint(0, tamanio - 1)
+
+            if (x, y) != (0, 0):
+                self.celdas[(x, y)] = "salida"
+                break
+
+    def _generar_tipo(self) -> str:
+
+        n = random.randint(1, 100)
+
+        if n <= 55:
+            return "nada"
+        elif n <= 70:
+            return "comida"
+        elif n <= 85:
+            return "arma"
+        elif n <= 97:
+            return "enemigo"
+        else:
+            return "salida"
+
+    def en_rango(self, x: int, y: int) -> bool:
+        return 0 <= x < self.tamanio and 0 <= y < self.tamanio
+
+    def visitar(self, x: int, y: int) -> str:
+        self.visitadas.add((x, y))
+        return self.celdas[(x, y)]
+
+    def consumir(self, x: int, y: int) -> None:
+        self.rastros[(x, y)] = self.celdas[(x, y)]
+        self.celdas[(x, y)] = "nada"
 
 
 # =====================================================
@@ -92,13 +172,18 @@ class JuegoGUI:
         self.root = root
         self.root.title("Juego POO")
         self.root.configure(bg=COLOR_FONDO)
-        self.root.geometry("720x560")
+        self.root.geometry("1080x640")
         self.root.resizable(False, False)
 
         self.jugador: Jugador | None = None
+        self.mapa: Mapa | None = None
         self.juego_terminado: bool = False
 
         self.pantalla_inicio()
+
+    # -------------------------------------------------
+    # UTILIDADES UI
+    # -------------------------------------------------
 
     def limpiar(self) -> None:
 
@@ -198,6 +283,7 @@ class JuegoGUI:
                 return
 
             self.jugador = Jugador(valor_nombre, valor_genero)
+            self.mapa = Mapa()
             self.pantalla_juego()
 
         crear_boton(contenedor, "Iniciar", iniciar, color=COLOR_ACENTO, width=20).pack()
@@ -247,10 +333,29 @@ class JuegoGUI:
         )
         self.lbl_distancia.grid(row=1, column=2, sticky="w", padx=10)
 
+        # CONTENIDO PRINCIPAL: MAPA + LOG
+
+        cuerpo = tk.Frame(self.root, bg=COLOR_FONDO)
+        cuerpo.pack(fill="both", expand=True, padx=10)
+
+        # MAPA (CANVAS)
+
+        lado = GRID_SIZE * CELDA_PX
+
+        self.canvas = tk.Canvas(
+            cuerpo,
+            width=lado,
+            height=lado,
+            bg=COLOR_FONDO,
+            highlightthickness=0,
+        )
+        self.canvas.pack(side="left", padx=(0, 10))
+        self.canvas.bind("<Button-1>", self.on_click_mapa)
+
         # LOG
 
-        frame_log = tk.Frame(self.root, bg=COLOR_FONDO)
-        frame_log.pack(fill="both", expand=True, padx=10)
+        frame_log = tk.Frame(cuerpo, bg=COLOR_FONDO)
+        frame_log.pack(side="right", fill="both", expand=True)
 
         self.texto_log = tk.Text(
             frame_log,
@@ -290,9 +395,12 @@ class JuegoGUI:
             )
 
         self.actualizar_stats()
+        self.dibujar_mapa()
+
         self.log("===== JUEGO INICIADO =====", COLOR_ACENTO)
         self.log(f"Bienvenido {self.jugador.nombre}")
         self.log(f"Vida: {self.jugador.vida} | Danio base: {self.jugador.damage}")
+        self.log("Muevete con los botones o tocando una celda vecina")
 
     # -------------------------------------------------
     # ACTUALIZAR STATS
@@ -306,7 +414,7 @@ class JuegoGUI:
         self.lbl_vida.config(text=f"Vida: {j.vida}")
         self.lbl_puntos.config(text=f"Puntos: {j.puntos}")
         self.lbl_pos.config(text=f"Posicion: ({j.posicion_x}, {j.posicion_y})")
-        self.lbl_turnos.config(text=f"Turnos: {j.turnos}/40")
+        self.lbl_turnos.config(text=f"Turnos: {j.turnos}/60")
         self.lbl_distancia.config(text=f"Distancia: {j.distancia_total}")
 
     # -------------------------------------------------
@@ -320,22 +428,36 @@ class JuegoGUI:
 
         j = self.jugador
 
+        nuevo_x = j.posicion_x
+        nuevo_y = j.posicion_y
+
         if direccion == "d":
-            j.posicion_x += 1
+            nuevo_x += 1
         elif direccion == "a":
-            j.posicion_x -= 1
+            nuevo_x -= 1
         elif direccion == "w":
-            j.posicion_y += 1
+            nuevo_y += 1
         elif direccion == "s":
-            j.posicion_y -= 1
+            nuevo_y -= 1
+
+        if not self.mapa.en_rango(nuevo_x, nuevo_y):
+            self.log("No puedes salir del mapa", COLOR_ERROR)
+            return
+
+        j.posicion_x = nuevo_x
+        j.posicion_y = nuevo_y
 
         j.distancia_total += 1
         j.turnos += 1
 
         self.log(f"\nTe moviste a ({j.posicion_x}, {j.posicion_y})", COLOR_ACENTO)
 
+        tipo = self.mapa.visitar(j.posicion_x, j.posicion_y)
+
         self.actualizar_stats()
-        self.evento_random()
+        self.dibujar_mapa()
+
+        self.disparar_evento(tipo)
 
         if j.vida <= 0:
             self.terminar_juego("perdio")
@@ -344,9 +466,39 @@ class JuegoGUI:
         if self.juego_terminado:
             return
 
-        if j.turnos >= 40:
-            self.log("\nSOBREVIVISTE 40 TURNOS", COLOR_OK)
+        if j.turnos >= 60:
+            self.log("\nSOBREVIVISTE 60 TURNOS", COLOR_OK)
             self.terminar_juego("gano")
+
+    def on_click_mapa(self, event) -> None:
+
+        if self.juego_terminado:
+            return
+
+        cx = event.x // CELDA_PX
+        cy_canvas = event.y // CELDA_PX
+
+        # invertir Y porque el canvas crece hacia abajo
+        cy = (GRID_SIZE - 1) - cy_canvas
+
+        if not self.mapa.en_rango(cx, cy):
+            return
+
+        dx = cx - self.jugador.posicion_x
+        dy = cy - self.jugador.posicion_y
+
+        if abs(dx) + abs(dy) != 1:
+            self.log("Solo puedes moverte a una celda vecina", COLOR_ERROR)
+            return
+
+        if dx == 1:
+            self.accion_mover("d")
+        elif dx == -1:
+            self.accion_mover("a")
+        elif dy == 1:
+            self.accion_mover("w")
+        elif dy == -1:
+            self.accion_mover("s")
 
     def accion_inventario(self) -> None:
 
@@ -417,17 +569,17 @@ class JuegoGUI:
             self.root.destroy()
 
     # -------------------------------------------------
-    # EVENTO RANDOM
+    # EVENTO POR CELDA
     # -------------------------------------------------
 
-    def evento_random(self) -> None:
+    def disparar_evento(self, tipo: str) -> None:
 
-        numero = random.randint(1, 100)
+        x, y = self.jugador.posicion_x, self.jugador.posicion_y
 
-        if numero <= 40:
+        if tipo == "nada":
             self.log("No ocurrio nada")
 
-        elif numero <= 50:
+        elif tipo == "comida":
 
             comidas = [
                 Comida("Pan", random.randint(1, 5)),
@@ -448,7 +600,10 @@ class JuegoGUI:
                 else:
                     self.log(f"Recogiste {comida}", COLOR_OK)
 
-        elif numero <= 60:
+            self.mapa.consumir(x, y)
+            self.dibujar_mapa()
+
+        elif tipo == "arma":
 
             armas = [
                 Arma("Cuchillo", 10, 20),
@@ -469,17 +624,107 @@ class JuegoGUI:
                 else:
                     self.log(f"Recogiste {arma}", COLOR_OK)
 
-        else:
+            self.mapa.consumir(x, y)
+            self.dibujar_mapa()
+
+        elif tipo == "enemigo":
 
             enemigo = generar_enemigo()
             self.log(f"\nAparecio un enemigo: {enemigo.nombre}", COLOR_ERROR)
             self.combate(enemigo)
 
-        salida = random.randint(1, 100)
+            self.mapa.consumir(x, y)
+            self.dibujar_mapa()
 
-        if salida <= 5 and not self.juego_terminado:
+        elif tipo == "salida":
+
             self.log("\nENCONTRASTE LA SALIDA", COLOR_OK)
             self.terminar_juego("gano")
+
+    # -------------------------------------------------
+    # DIBUJAR MAPA
+    # -------------------------------------------------
+
+    def dibujar_mapa(self) -> None:
+
+        self.canvas.delete("all")
+
+        for x in range(GRID_SIZE):
+            for y in range(GRID_SIZE):
+
+                # invertir Y para que +y se dibuje hacia arriba
+                cy = (GRID_SIZE - 1) - y
+
+                x1 = x * CELDA_PX
+                y1 = cy * CELDA_PX
+                x2 = x1 + CELDA_PX
+                y2 = y1 + CELDA_PX
+
+                if (x, y) in self.mapa.visitadas:
+
+                    tipo = self.mapa.celdas[(x, y)]
+                    letra, color = ICONO_CELDA[tipo]
+
+                    self.canvas.create_rectangle(
+                        x1, y1, x2, y2, fill=COLOR_VISITADA, outline=COLOR_BORDE
+                    )
+
+                    if letra:
+                        self.canvas.create_text(
+                            x2 - 10,
+                            y1 + 10,
+                            text=letra,
+                            fill=color,
+                            font=FUENTE_CELDA,
+                        )
+                    elif (x, y) in self.mapa.rastros:
+                        rastro_tipo = self.mapa.rastros[(x, y)]
+                        rastro_letra, _ = ICONO_CELDA[rastro_tipo]
+                        self.canvas.create_text(
+                            x2 - 10,
+                            y1 + 10,
+                            text=rastro_letra,
+                            fill=COLOR_RASTRO,
+                            font=FUENTE_CELDA,
+                        )
+
+                else:
+                    self.canvas.create_rectangle(
+                        x1, y1, x2, y2, fill=COLOR_OCULTO, outline=COLOR_BORDE
+                    )
+
+        # dibujar al jugador como un maguito
+        jx = self.jugador.posicion_x
+        jy = (GRID_SIZE - 1) - self.jugador.posicion_y
+
+        x1 = jx * CELDA_PX
+        y1 = jy * CELDA_PX
+
+        # tunica
+        self.canvas.create_polygon(
+            x1 + CELDA_PX * 0.5, y1 + CELDA_PX * 0.55,
+            x1 + CELDA_PX * 0.12, y1 + CELDA_PX * 0.95,
+            x1 + CELDA_PX * 0.88, y1 + CELDA_PX * 0.95,
+            fill=COLOR_ACENTO,
+            outline=COLOR_TEXTO,
+        )
+
+        # cabeza
+        self.canvas.create_oval(
+            x1 + CELDA_PX * 0.32, y1 + CELDA_PX * 0.30,
+            x1 + CELDA_PX * 0.68, y1 + CELDA_PX * 0.58,
+            fill="#f5deb3",
+            outline=COLOR_TEXTO,
+        )
+
+        # sombrero
+        self.canvas.create_polygon(
+            x1 + CELDA_PX * 0.5, y1 + CELDA_PX * 0.02,
+            x1 + CELDA_PX * 0.22, y1 + CELDA_PX * 0.36,
+            x1 + CELDA_PX * 0.78, y1 + CELDA_PX * 0.36,
+            fill="#bb9af7",
+            outline=COLOR_TEXTO,
+        )
 
     # -------------------------------------------------
     # COMBATE
@@ -614,7 +859,9 @@ class JuegoGUI:
         self.juego_terminado = True
 
         if resultado == "gano":
+            self.jugador.puntos += 250
             self.log("\n===== GANASTE =====", COLOR_OK)
+            self.log("Bono por ganar: +250 pts", COLOR_OK)
         else:
             self.log("\n===== GAME OVER =====", COLOR_ERROR)
 
@@ -630,6 +877,7 @@ class JuegoGUI:
     def reiniciar(self) -> None:
 
         self.jugador = None
+        self.mapa = None
         self.juego_terminado = False
         self.pantalla_inicio()
 
